@@ -441,42 +441,49 @@ function atualizarEstoqueHome(){
   let tabelaHome = document.getElementById("tabelaHome");
   let buscaInput = document.getElementById("buscaProduto");
 
-  let busca = buscaInput.value?.toLowerCase() || "";
+  let busca = (buscaInput.value || "").toLowerCase();
 
   tabelaHome.innerHTML = "";
 
   fetch("https://stockflow-mafe-1.onrender.com/produtos")
-    .then(res => res.json())
+    .then(res => {
+      if(!res.ok) throw new Error("Erro no servidor");
+      return res.json();
+    })
     .then(produtosAPI => {
 
-      produtos = produtosAPI.map(p => {
-         let local = produtos.find(lp => lp.codigo === p.codigo) || {};
+      let produtosLocal = produtos || [];
 
-         return {
+      produtos = produtosAPI.map(p => {
+        let local = produtosLocal.find(lp => lp.codigo === p.codigo) || {};
+
+        return {
           ...p,
-           entradas: local.entradas || [],
-           saidas: local.saidas || []
-         };
-        });   
+          entradas: local.entradas || [],
+          saidas: local.saidas || []
+        };
+      });
 
       produtos.forEach(p => {
 
+        let codigo = (p.codigo || "").toLowerCase();
+        let descricao = (p.descricao || "").toLowerCase();
+
         if (
-          p.codigo.toLowerCase().includes(busca) ||
-          (p.descricao || "").toLowerCase().includes(busca)
+          codigo.includes(busca) ||
+          descricao.includes(busca)
         ) {
+
+          let quantidade =
+            (p.entradas?.reduce((t,e)=>t+e.qtd,0) || 0) -
+            (p.saidas?.reduce((t,s)=>t+s.qtd,0) || 0);
 
           tabelaHome.innerHTML += `
             <tr>
               <td>${p.codigo}</td>
               <td>${p.descricao || "Sem descrição"}</td>
               <td>${p.marca}</td>
-              <td>
-                ${
-                (p.entradas?.reduce((t,e)=>t+e.qtd,0) || 0) -
-                (p.saidas?.reduce((t,s)=>t+s.qtd,0) || 0)
-              }
-              </td>
+              <td>${quantidade}</td>
               ${
                 usuarioLogado.tipo === "admin"
                 ? `<td><button onclick="excluirProduto(${p.id})">Excluir</button></td>`
@@ -484,11 +491,14 @@ function atualizarEstoqueHome(){
               }
             </tr>
           `;
-
         }
 
       });
 
+    })
+    .catch(() => {
+      // 👇 tenta de novo se o Render estiver dormindo
+      setTimeout(() => atualizarEstoqueHome(), 2000);
     });
 }
 
